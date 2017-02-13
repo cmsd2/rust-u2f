@@ -53,11 +53,24 @@ pub enum U2fResponseData {
     },
 
     RegisterResponse {
+        version: String,
 
+        #[serde(rename="registrationData")]
+        registration_data: String,
+
+        #[serde(rename="clientData")]
+        client_data: String,
     },
 
     SignResponse {
+        #[serde(rename="keyHandle")]
+        key_handle: String,
 
+        #[serde(rename="signatureData")]
+        signature_data: String,
+
+        #[serde(rename="clientData")]
+        client_data: String,
     }
 }
 
@@ -85,7 +98,37 @@ mod test {
     }
 
     #[test]
-    fn test_response_deserialization() {
+    fn test_registration_response_deserialization() {
+        let err_response_json = "{\"type\":\"u2f_register_response\",\"responseData\":{\"version\":\"0\",\"registrationData\":\"foo\",\"clientData\":\"bar\"},\"requestId\":null}";
+        let err_response = serde_json::from_str::<U2fResponse>(err_response_json).unwrap();
+        assert_eq!(err_response, U2fResponse {
+            response_type: U2fResponseType::RegisterResponse,
+            response_data: U2fResponseData::RegisterResponse {
+                version: "0".to_string(),
+                registration_data: "foo".to_string(),
+                client_data: "bar".to_string(),
+            },
+            request_id: None,
+        });
+    }
+
+    #[test]
+    fn test_sign_response_deserialization() {
+        let err_response_json = "{\"type\":\"u2f_sign_response\",\"responseData\":{\"keyHandle\":\"foo\",\"signatureData\":\"bar\",\"clientData\":\"baz\"},\"requestId\":null}";
+        let err_response = serde_json::from_str::<U2fResponse>(err_response_json).unwrap();
+        assert_eq!(err_response, U2fResponse {
+            response_type: U2fResponseType::SignResponse,
+            response_data: U2fResponseData::SignResponse {
+                key_handle: "foo".to_string(),
+                signature_data: "bar".to_string(),
+                client_data: "baz".to_string(),
+            },
+            request_id: None,
+        });
+    }
+
+    #[test]
+    fn test_error_response_deserialization() {
         let err_response_json = "{\"type\":\"u2f_register_response\",\"responseData\":{\"errorCode\":0,\"errorMessage\":null},\"requestId\":null}";
         let err_response = serde_json::from_str::<U2fResponse>(err_response_json).unwrap();
         assert_eq!(err_response, U2fResponse {
