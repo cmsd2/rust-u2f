@@ -6,7 +6,7 @@ extern crate serde_json;
 #[macro_use]
 pub mod serde_enum;
 
-pub mod rp_api;
+pub mod rp_u2f;
 
 #[cfg(test)]
 mod tests {

@@ -9,18 +9,43 @@ pub enum U2fRequestType {
 }
 
 #[derive(Serialize, Deserialize,Clone,Debug,PartialEq)]
-pub struct U2fRequest {
-    #[serde(rename="type")]
-    pub request_type: U2fRequestType,
+#[serde(tag="type")]
+pub enum U2fRequest {
+    #[serde(rename="u2f_register_request")]
+    RegisterRequest {
 
-    #[serde(rename="appId")]
-    pub app_id: Option<String>,
+        #[serde(rename="appId")]
+        app_id: Option<String>,
 
-    #[serde(rename="timeoutSeconds")]
-    pub timeout_seconds: Option<u32>,
-    
-    #[serde(rename="requestId")]
-    pub request_id: Option<u32>,
+        #[serde(rename="timeoutSeconds")]
+        timeout_seconds: Option<u32>,
+        
+        #[serde(rename="requestId")]
+        request_id: Option<u32>,
+
+        #[serde(rename="registerRequests")]
+        register_requests: Vec<RegisterRequest>,
+
+        #[serde(rename="registeredKeys")]
+        registered_keys: Vec<RegisteredKey>,
+    },
+
+    #[serde(rename="u2f_sign_request")]
+    SignRequest {
+        #[serde(rename="appId")]
+        app_id: Option<String>,
+
+        #[serde(rename="timeoutSeconds")]
+        timeout_seconds: Option<u32>,
+        
+        #[serde(rename="requestId")]
+        request_id: Option<u32>,
+
+        challenge: String,
+
+        #[serde(rename="registeredKeys")]
+        registered_keys: Vec<RegisteredKey>,
+    }
 }
 
 #[derive(Serialize,Deserialize,Copy,Clone,Debug,PartialEq)]
@@ -86,15 +111,78 @@ pub struct U2fResponse {
     pub request_id: Option<u32>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum Transport {
+    #[serde(rename="bt")]
+    Bluetooth,
+
+    #[serde(rename="ble")]
+    BluetoothLE,
+
+    #[serde(rename="nfc")]
+    NFC,
+
+    #[serde(rename="usb")]
+    USB,
+}
+
+pub type Transports = Vec<Transport>;
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct RegisterRequest {
+    version: String,
+    challenge: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct RegisteredKey {
+    version: String,
+
+    #[serde(rename="keyHandle")]
+    key_handle: String,
+
+    transports: Option<Transports>,
+
+    #[serde(rename="appId")]
+    app_id: Option<String>,
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use serde_json;
 
     #[test]
-    fn test_request_serialization() {
-        let reg = U2fRequest { request_type: U2fRequestType::RegisterRequest, app_id: None, timeout_seconds: None, request_id: None };
-        assert_eq!(serde_json::to_string(&reg).unwrap(), "{\"type\":\"u2f_register_request\",\"appId\":null,\"timeoutSeconds\":null,\"requestId\":null}");
+    fn test_register_request_serialization() {
+        let reg = U2fRequest::RegisterRequest { app_id: None, timeout_seconds: None, request_id: None, register_requests: vec![], registered_keys: vec![] };
+        assert_eq!(serde_json::to_string(&reg).unwrap(), "{\"type\":\"u2f_register_request\",\"appId\":null,\"timeoutSeconds\":null,\"requestId\":null,\"registerRequests\":[],\"registeredKeys\":[]}");
+    }
+
+    #[test]
+    fn test_sign_request_serialization() {
+        let reg = U2fRequest::SignRequest { app_id: None, timeout_seconds: None, request_id: None, challenge: "foo".to_string(), registered_keys: vec![] };
+        assert_eq!(serde_json::to_string(&reg).unwrap(), "{\"type\":\"u2f_sign_request\",\"appId\":null,\"timeoutSeconds\":null,\"requestId\":null,\"challenge\":\"foo\",\"registeredKeys\":[]}");
+    }
+
+    #[test]
+    fn test_error_codes() {
+        let code = serde_json::from_str::<ErrorCode>("0").unwrap();
+        assert_eq!(code, ErrorCode::Ok);
+
+        let code = serde_json::from_str::<ErrorCode>("1").unwrap();
+        assert_eq!(code, ErrorCode::OtherError);
+
+        let code = serde_json::to_string::<ErrorCode>(&ErrorCode::OtherError).unwrap();
+        assert_eq!(&code, "1");
+    }
+
+    #[test]
+    fn test_transports() {
+        let t = serde_json::from_str::<Transport>("\"ble\"").unwrap();
+        assert_eq!(t, Transport::BluetoothLE);
+
+        let t = serde_json::to_string::<Transport>(&Transport::BluetoothLE).unwrap();
+        assert_eq!(&t, "\"ble\"");
     }
 
     #[test]
