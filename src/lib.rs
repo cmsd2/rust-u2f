@@ -5,6 +5,7 @@ extern crate serde_json;
 extern crate futures;
 #[macro_use]
 extern crate error_chain;
+extern crate bytebuffer;
 
 #[macro_use]
 pub mod serde_enum;

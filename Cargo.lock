@@ -2,8 +2,10 @@
 name = "u2f"
 version = "0.1.0"
 dependencies = [
+ "bytebuffer 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libusb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 0.9.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 0.9.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.9.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -31,6 +33,32 @@ dependencies = [
  "gcc 0.3.43 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "bit-set"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "bit-vec 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "bit-vec"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "bytebuffer"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "byteorder 0.3.13 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "byteorder"
+version = "0.3.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "cfg-if"
@@ -92,6 +120,30 @@ version = "0.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "libusb"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "bit-set 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libusb-sys 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "libusb-sys"
+version = "0.2.3"
+dependencies = [
+ "libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pkg-config 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "libusb-sys"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+replace = "libusb-sys 0.2.3"
+
+[[package]]
 name = "log"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -99,6 +151,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "num-traits"
 version = "0.1.36"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "pkg-config"
+version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -172,6 +229,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [metadata]
 "checksum backtrace 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f551bc2ddd53aea015d453ef0b635af89444afa5ed2405dd0b2062ad5d600d80"
 "checksum backtrace-sys 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)" = "222dcb05eb5e2cdb6780af3576397d258aa82160e8be44141c9248c8e4b3d310"
+"checksum bit-set 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e6e1e6fb1c9e3d6fcdec57216a74eaa03e41f52a22f13a16438251d8e88b89da"
+"checksum bit-vec 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "5b97c2c8e8bbb4251754f559df8af22fb264853c7d009084a576cdf12565089d"
+"checksum bytebuffer 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3b83cf65778df3239c01e99e1b11b7470fe8c0c3f887a5993ffcc0d7f93a2485"
+"checksum byteorder 0.3.13 (registry+https://github.com/rust-lang/crates.io-index)" = "29b2aa490a8f546381308d68fc79e6bd753cd3ad839f7a7172897f1feedfa175"
 "checksum cfg-if 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "de1e760d7b6535af4241fca8bd8adf68e2e7edacc6b29f5d399050c5e48cf88c"
 "checksum dbghelp-sys 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "97590ba53bcb8ac28279161ca943a924d1fd4a8fb3fa63302591647c4fc5b850"
 "checksum dtoa 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "80c8b71fd71146990a9742fc06dcbbde19161a267e0ad4e572c35162f4578c90"
@@ -181,8 +242,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum itoa 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "eb2f404fbc66fd9aac13e998248505e7ecb2ad8e44ab6388684c5fb11c6c251c"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum libc 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)" = "684f330624d8c3784fb9558ca46c4ce488073a8d22450415c5eb4f4cfb0d11b5"
+"checksum libusb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5f990ddd929cbe53de4ecd6cf26e1f4e0c5b9796e4c629d9046570b03738aa53"
+"checksum libusb-sys 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "4c53b6582563d64ad3e692f54ef95239c3ea8069e82c9eb70ca948869a7ad767"
 "checksum log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "ab83497bf8bf4ed2a74259c1c802351fcd67a65baa86394b6ba73c36f4838054"
 "checksum num-traits 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)" = "a16a42856a256b39c6d3484f097f6713e14feacd9bfb02290917904fae46c81c"
+"checksum pkg-config 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "3a8b4c6b8165cd1a1cd4b9b120978131389f64bdaf456435caa41e630edba903"
 "checksum quote 0.3.12 (registry+https://github.com/rust-lang/crates.io-index)" = "e7b44fd83db28b83c1c58187159934906e5e955c812e211df413b76b03c909a5"
 "checksum rustc-demangle 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "1430d286cadb237c17c885e25447c982c97113926bb579f4379c0eca8d9586dc"
 "checksum serde 0.9.7 (registry+https://github.com/rust-lang/crates.io-index)" = "1e0ed773960f90a78567fcfbe935284adf50c5d7cf119aa2cf43bb0b4afa69bb"
