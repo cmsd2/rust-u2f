@@ -1,9 +1,28 @@
 use bytebuffer::*;
 use raw::error::*;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum U2fCommand {
+    Register = 0x1,
+    Authenticate = 0x2,
+    Version = 0x3,
+}
+
+enum_from_primitive! {
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum U2fStatusWord {
+    NoError = 0x9000,
+    WrongData = 0x6984,
+    ConditionsNotSatisfied = 0x6985,
+    InsNotSupported = 0x6d00,
+    ClaNotSupported = 0x6e00,
+}
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct CommandAPDU {
     cla: u8, // reserved by underlying protocol. zero.
-    ins: u8, // u2f command code
+    ins: U2fCommand, // u2f command code
     p1: u8, // command parameter 1
     p2: u8, // command parameter 2
     request_data: Vec<u8>,
@@ -11,7 +30,7 @@ pub struct CommandAPDU {
 }
 
 impl CommandAPDU {
-    pub fn new(ins: u8, p1: u8, p2: u8, request_data: Vec<u8>, le: Option<usize>) -> CommandAPDU {
+    pub fn new(ins: U2fCommand, p1: u8, p2: u8, request_data: Vec<u8>, le: Option<usize>) -> CommandAPDU {
         CommandAPDU {
             cla: 0,
             ins: ins,
@@ -50,7 +69,7 @@ impl RequestEncoder for ShortEncoder {
         }
 
         bb.write_u8(cmd.cla);
-        bb.write_u8(cmd.ins);
+        bb.write_u8(cmd.ins as u8);
         bb.write_u8(cmd.p1);
         bb.write_u8(cmd.p2);
 
@@ -61,7 +80,6 @@ impl RequestEncoder for ShortEncoder {
             bb.write_bytes(&cmd.request_data[..]);
         }
 
-        // section 3.1.1 is weird.
         if let Some(le) = cmd.le {
             let ne = if le == Self::max_response_data() { 0 } else { le };
 
@@ -80,10 +98,48 @@ impl RequestEncoder for ShortEncoder {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum U2fExtendedEncodingVersion {
+    V1,
+    V1_1
+}
+
+pub struct ExtendedEncoderV1;
+
+impl RequestEncoder for ExtendedEncoderV1 {
+    fn encode(bb: &mut ByteBuffer, cmd: CommandAPDU) -> Result<()> {
+        ExtendedEncoder::extended_encode(bb, cmd, U2fExtendedEncodingVersion::V1)
+    }
+
+    fn max_request_data() -> usize {
+        ExtendedEncoder::max_request_data()
+    }
+
+    fn max_response_data() -> usize {
+        ExtendedEncoder::max_response_data()
+    }
+}
+
+pub struct ExtendedEncoderV1_1;
+
+impl RequestEncoder for ExtendedEncoderV1_1 {
+    fn encode(bb: &mut ByteBuffer, cmd: CommandAPDU) -> Result<()> {
+        ExtendedEncoder::extended_encode(bb, cmd, U2fExtendedEncodingVersion::V1_1)
+    }
+
+    fn max_request_data() -> usize {
+        ExtendedEncoder::max_request_data()
+    }
+
+    fn max_response_data() -> usize {
+        ExtendedEncoder::max_response_data()
+    }
+}
+
 pub struct ExtendedEncoder;
 
-impl RequestEncoder for ExtendedEncoder {
-    fn encode(bb: &mut ByteBuffer, cmd: CommandAPDU) -> Result<()> {
+impl ExtendedEncoder {
+    fn extended_encode(bb: &mut ByteBuffer, cmd: CommandAPDU, version: U2fExtendedEncodingVersion) -> Result<()> {
         if cmd.request_data.len() > Self::max_request_data() {
             return Err(ErrorKind::RequestDataTooLong.into());
         }
@@ -99,28 +155,37 @@ impl RequestEncoder for ExtendedEncoder {
         }
 
         bb.write_u8(cmd.cla);
-        bb.write_u8(cmd.ins);
+        bb.write_u8(cmd.ins as u8);
         bb.write_u8(cmd.p1);
         bb.write_u8(cmd.p2);
 
         let nc = cmd.request_data.len();
-        if nc != 0 {
-            bb.write_u8(0);
+
+        if version == U2fExtendedEncodingVersion::V1 {
+            bb.write_u8(((nc >> 16) & 0xff) as u8);
             bb.write_u8(((nc >> 8) & 0xff) as u8);
             bb.write_u8((nc & 0xff) as u8);
-
-            bb.write_bytes(&cmd.request_data[..]);
+        } else {
+            if nc != 0 {
+                bb.write_u8(0);
+                bb.write_u8(((nc >> 8) & 0xff) as u8);
+                bb.write_u8((nc & 0xff) as u8);
+            }
         }
 
-        if let Some(le) = cmd.le {
-            let ne = if le == Self::max_response_data() { 0 } else { le };
+        bb.write_bytes(&cmd.request_data[..]);
 
-            if nc == 0 {
-                bb.write_u8(0);
+        if version == U2fExtendedEncodingVersion::V1_1 {
+            if let Some(le) = cmd.le {
+                let ne = if le == Self::max_response_data() { 0 } else { le };
+
+                if nc == 0 {
+                    bb.write_u8(0);
+                }
+
+                bb.write_u8(((ne >> 8) & 0xff) as u8);
+                bb.write_u8((ne & 0xff) as u8);
             }
-
-            bb.write_u8(((ne >> 8) & 0xff) as u8);
-            bb.write_u8((ne & 0xff) as u8);
         }
 
         Ok(())
@@ -135,6 +200,7 @@ impl RequestEncoder for ExtendedEncoder {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct ResponseAPDU {
     pub response_data: Vec<u8>,
     pub status: u16
@@ -181,7 +247,7 @@ mod test {
     fn test_short_get_version() {
         let expected = vec![0, 3, 0, 0, 0];
         let mut bb = ByteBuffer::new();
-        ShortEncoder::encode(&mut bb, CommandAPDU::new(3, 0, 0, vec![], Some(256))).unwrap();
+        ShortEncoder::encode(&mut bb, CommandAPDU::new(U2fCommand::Version, 0, 0, vec![], Some(256))).unwrap();
         assert_eq!(bb.to_bytes(), expected);
     }
 
@@ -189,7 +255,7 @@ mod test {
     fn test_extended_get_version() {
         let expected = vec![0, 3, 0, 0, 0, 0, 0];
         let mut bb = ByteBuffer::new();
-        ExtendedEncoder::encode(&mut bb, CommandAPDU::new(3, 0, 0, vec![], Some(65536))).unwrap();
+        ExtendedEncoder::encode(&mut bb, CommandAPDU::new(U2fCommand::Version, 0, 0, vec![], Some(65536))).unwrap();
         assert_eq!(bb.to_bytes(), expected);
     }
 

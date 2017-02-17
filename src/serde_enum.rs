@@ -7,7 +7,7 @@ macro_rules! enum_number {
         }
 
         impl ::serde::Serialize for $name {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
                 where S: ::serde::Serializer
             {
                 // Serialize the enum as a u64.
@@ -16,7 +16,7 @@ macro_rules! enum_number {
         }
 
         impl ::serde::Deserialize for $name {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
                 where D: ::serde::Deserializer
             {
                 use std::fmt;
@@ -30,7 +30,7 @@ macro_rules! enum_number {
                         formatter.write_str("positive integer")
                     }
 
-                    fn visit_u64<E>(self, value: u64) -> Result<$name, E>
+                    fn visit_u64<E>(self, value: u64) -> ::std::result::Result<$name, E>
                         where E: ::serde::de::Error
                     {
                         // Rust does not come with a simple way of converting a
