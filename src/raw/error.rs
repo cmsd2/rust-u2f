@@ -1,10 +1,5 @@
-use usb;
 
 error_chain! {
-    links {
-        Hid(usb::error::Error, usb::error::ErrorKind);
-    }
-
     errors {
         ResponseFrameTooShort {
             description("response frame is too short")
@@ -29,16 +24,6 @@ error_chain! {
         FrameTooSmall {
             description("frame too small")
             display("frame too small")
-        }
-
-        ErrorStatus(status: u16) {
-            description("error status")
-            display("error status: {}", status)
-        }
-
-        UnrecognisedVersion {
-            description("unrecognised version")
-            display("unrecognised version")
         }
     }
 }

@@ -1,13 +1,15 @@
 use bytebuffer::*;
-use super::error::*;
 use std::cmp;
-use hidapi::*;
 use rand;
 use rand::Rng;
 use enum_primitive::FromPrimitive;
 
+use super::error::*;
+use hidapi::*;
+use raw::frame::*;
+
 #[derive(Debug, Clone)]
-pub struct U2fDeviceInfo {
+pub struct U2fHidDeviceInfo {
     pub protocol_version: u8,
     pub major_device_version: u8,
     pub minor_device_version: u8,
@@ -15,11 +17,11 @@ pub struct U2fDeviceInfo {
     pub raw_capabilities: u8,
 }
 
-pub struct U2fDevice<'a> {
+pub struct U2fHidDevice<'a> {
     pub packet_size: usize,
     pub channel_id: u32,
     pub hid_device: HidDevice<'a>,
-    pub u2f_info: Option<U2fDeviceInfo>,
+    pub u2f_info: Option<U2fHidDeviceInfo>,
 }
 
 pub const BROADCAST_CID: u32 = 0xffffffff;
@@ -39,7 +41,47 @@ pub enum U2fHidCommand {
 }
 }
 
-impl <'a> U2fDevice<'a> {
+enum_from_primitive! {
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum U2fHidErrorCode {
+	InvalidCommand = 0x1,
+    InvalidParameter = 0x2,
+    InvalidMessageLength = 0x3,
+    InvalidMessageSequence = 0x4,
+    MessageTimedOut = 0x5,
+    ChannelBusy = 0x6,
+    CommandRequiresChannelLock = 0xa,
+    SyncCommandFailed = 0xb,
+    OtherError = 0x7f,
+}
+}
+
+pub trait SmartCard {
+    fn send_apdu<E>(&self, cmd: CommandAPDU) -> Result<ResponseAPDU> where E: RequestEncoder;
+}
+
+impl <'a> SmartCard for U2fHidDevice<'a> {
+    fn send_apdu<E>(&self, cmd: CommandAPDU) -> Result<ResponseAPDU> where E: RequestEncoder {
+        let mut bb = ByteBuffer::new();
+
+        E::encode(&mut bb, cmd)?;
+
+        println!("encoded {} bytes", bb.len());
+
+        self.command(U2fHidCommand::Msg, &mut bb)?;
+
+        let response = Decoder::decode(&mut bb)?;
+
+        match U2fStatusWord::from_u16(response.status) {
+            Some(U2fStatusWord::NoError) => Ok(response),
+            Some(err) => Err(ErrorKind::ErrorStatus(err).into()),
+            None => Err(ErrorKind::UnknownErrorStatus(response.status).into())
+        }
+    }
+}
+
+impl <'a> U2fHidDevice<'a> {
+
     pub fn ping(&self) -> Result<()> {
         let mut buf = ByteBuffer::new();
         buf.write_u8(0);
@@ -54,7 +96,7 @@ impl <'a> U2fDevice<'a> {
     pub fn wink(&self) -> Result<()> {
         let mut buf = ByteBuffer::new();
 
-        self.command(U2fHidCommand::Wink, &mut buf);
+        self.command(U2fHidCommand::Wink, &mut buf)?;
 
         Ok(())
     }
@@ -64,7 +106,7 @@ impl <'a> U2fDevice<'a> {
 
         buf.write_bytes(msg);
 
-        self.command(U2fHidCommand::Msg, &mut buf);
+        self.command(U2fHidCommand::Msg, &mut buf)?;
 
         Ok(buf.to_bytes())
     }
@@ -85,7 +127,7 @@ impl <'a> U2fDevice<'a> {
         self.channel_id = BROADCAST_CID;
 
         let mut buf = ByteBuffer::new();
-        
+
         let nonce = Self::nonce();
         buf.write_bytes(nonce.as_slice());
 
@@ -107,7 +149,7 @@ impl <'a> U2fDevice<'a> {
 
             self.channel_id = buf.read_u32();
 
-            let info = U2fDeviceInfo {
+            let info = U2fHidDeviceInfo {
                 protocol_version: buf.read_u8(),
                 major_device_version: buf.read_u8(),
                 minor_device_version: buf.read_u8(),
@@ -154,14 +196,18 @@ impl <'a> U2fDevice<'a> {
 
         while request_data.get_rpos() < request_data.len() {
             request.clear();
-            seq += 1;
 
             request.write_u8(0x0); // hid report number
 
             prepare_cont_packet(&mut request, self.channel_id, seq, request_data, self.packet_size);
 
+            println!("sending {} bytes", request.len());
+            println!("sending {:?}", request.to_bytes());
+
             // send cont packet
             self.hid_device.write(&request.to_bytes()[..])?;
+
+            seq += 1;
         }
 
         Ok(())
@@ -210,8 +256,20 @@ impl <'a> U2fDevice<'a> {
             payload_remaining -= fragment_len;
         }
 
-        if U2fHidCommand::from_u8(init_frame.command) != Some(command) {
-            bail!(ErrorKind::HidError);
+        let recvd_command = U2fHidCommand::from_u8(init_frame.command);
+        if recvd_command == Some(U2fHidCommand::Error) {
+            if response.len() != 0 {
+                let code = response.read_u8();
+                if let Some(code) = U2fHidErrorCode::from_u8(code) {
+                    bail!(ErrorKind::HidError(code));
+                } else {
+                    bail!(ErrorKind::HidUnknownError(code));
+                }
+            }
+            bail!(ErrorKind::HidUnknownError(0));
+        } else if recvd_command != Some(command) {
+            println!("received response with mismatched command: {:?}", init_frame);
+            bail!(ErrorKind::UnknownHidCommand(init_frame.command));
         }
 
         Ok(())
