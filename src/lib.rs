@@ -43,20 +43,28 @@ pub enum U2fVersion {
     V2
 }
 
-pub struct RegisterResponse<'b> {
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RegisterResponse {
     pub user_public_key: Vec<u8>,
     pub key_handle: Vec<u8>,
-    pub attestation_cert: webpki::EndEntityCert<'b>,
+    pub attestation_cert: Vec<u8>,
     pub signature: Vec<u8>,
 }
 
+impl RegisterResponse {
+    pub fn cert<'a>(&'a self) -> Result<webpki::EndEntityCert<'a>> {
+        parse_cert(&self.attestation_cert).into()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AuthenticateResponse {
     pub counter: u32,
     pub signature: Vec<u8>,
 }
 
 pub trait U2fDevice {
-    fn register<'b>(&self, challenge_param: &[u8], application_param: &[u8], cert_bytes: &'b mut Vec<u8>) -> Result<RegisterResponse<'b>>;
+    fn register<'b>(&self, challenge_param: &[u8], application_param: &[u8]) -> Result<RegisterResponse>;
 
     fn authenticate(&self, challenge_param: &[u8], application_param: &[u8], key_handle: &[u8]) -> Result<AuthenticateResponse>;
 
@@ -64,7 +72,7 @@ pub trait U2fDevice {
 }
 
 impl <'a> U2fDevice for U2fHidDevice<'a> {
-    fn register<'b>(&self, challenge_param: &[u8], application_param: &[u8], cert_bytes: &'b mut Vec<u8>) -> Result<RegisterResponse<'b>> {
+    fn register<'b>(&self, challenge_param: &[u8], application_param: &[u8]) -> Result<RegisterResponse> {
         if challenge_param.len() != 32 {
             bail!(ErrorKind::InvalidChallengeParameter);
         }
@@ -100,17 +108,15 @@ impl <'a> U2fDevice for U2fHidDevice<'a> {
 
         let remaining_len = buf.len() - buf.get_rpos();
         let remaining = buf.read_bytes(remaining_len);
-        cert_bytes.extend_from_slice(&remaining);
 
-        let cert_len = cert_len(cert_bytes);
-        let signature = cert_bytes[cert_len..].to_owned();
-        cert_bytes.truncate(cert_len);
-        let cert = parse_cert(cert_bytes)?;
+        let cert_len = cert_len(&remaining[..]);
+        let cert_bytes = remaining[0..cert_len].to_owned();
+        let signature = remaining[cert_len..].to_owned();
         
         Ok(RegisterResponse {
             user_public_key: public_key,
             key_handle: key_handle,
-            attestation_cert: cert,
+            attestation_cert: cert_bytes,
             signature: signature
         })
     }
@@ -130,15 +136,17 @@ impl <'a> U2fDevice for U2fHidDevice<'a> {
 
         let mut buf = ByteBuffer::new();
 
-        buf.write_u8(1);
         buf.write_bytes(challenge_param);
         buf.write_bytes(application_param);
         buf.write_u8(key_handle.len() as u8);
         buf.write_bytes(key_handle);
 
-        let response = self.send_apdu::<ExtendedEncoderV1>(
-            CommandAPDU::new(U2fCommand::Authenticate, AUTH_USER_PRESENCE_ENFORCE, 0, buf.to_bytes(), Some(256))
-        )?;
+        let response = match self.send_apdu::<ExtendedEncoderV1>(
+                CommandAPDU::new(U2fCommand::Authenticate, AUTH_USER_PRESENCE_ENFORCE, 0, buf.to_bytes(), Some(256))) {
+            Ok(response) => response,
+            Err(usb::error::Error(usb::error::ErrorKind::ErrorStatus(U2fStatusWord::ConditionsNotSatisfied), _)) => bail!(ErrorKind::UserPresenceRequired),
+            Err(e) => bail!(e)
+        };
 
         buf = ByteBuffer::from_bytes(response.response_data.as_slice());
         
