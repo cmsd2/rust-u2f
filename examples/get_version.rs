@@ -18,6 +18,9 @@ pub fn main() {
 
     if let Some(ref device) = devices.first() {
         get_version(&api, device);
+    } else {
+        println!("no fido device found");
+        std::process::exit(1);
     }
 }
 
