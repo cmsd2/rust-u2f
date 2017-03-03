@@ -43,6 +43,36 @@ pub enum U2fVersion {
     V2
 }
 
+pub trait Signature {
+    fn user_public_key<'a>(&'a self) -> &'a [u8];
+    fn key_handle<'a>(&'a self) -> &'a [u8];
+    fn cert<'a>(&'a self) -> Result<webpki::EndEntityCert<'a>>;
+    fn signature<'a>(&'a self) -> &'a [u8];
+}
+
+pub trait Verify {
+    fn verify(&self, challenge_param: &[u8], app_param: &[u8]) -> Result<()>;
+}
+
+impl <T> Verify for T where T: Signature {
+    fn verify(&self, challenge_param: &[u8], app_param: &[u8]) -> Result<()> {
+        let mut msg = ByteBuffer::new();
+        msg.write_u8(0);
+        msg.write_bytes(app_param);
+        msg.write_bytes(challenge_param);
+        msg.write_bytes(self.key_handle());
+        msg.write_bytes(self.user_public_key());
+        let signing_string = msg.to_bytes();
+
+        let cert = self.cert().expect("cert");
+
+        cert.verify_signature(&webpki::ECDSA_P256_SHA256, 
+            untrusted::Input::from(&signing_string),
+            untrusted::Input::from(&self.signature()))
+            .map_err(|e| ErrorKind::WebPkiError(e).into())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RegisterResponse {
     pub user_public_key: Vec<u8>,
@@ -51,9 +81,21 @@ pub struct RegisterResponse {
     pub signature: Vec<u8>,
 }
 
-impl RegisterResponse {
-    pub fn cert<'a>(&'a self) -> Result<webpki::EndEntityCert<'a>> {
+impl Signature for RegisterResponse {
+    fn key_handle<'a>(&'a self) -> &'a [u8] {
+        &self.key_handle
+    }
+
+    fn user_public_key<'a>(&'a self) -> &'a [u8] {
+        &self.user_public_key
+    }
+
+    fn cert<'a>(&'a self) -> Result<webpki::EndEntityCert<'a>> {
         parse_cert(&self.attestation_cert).into()
+    }
+
+    fn signature<'a>(&'a self) -> &'a [u8] {
+        &self.signature
     }
 }
 

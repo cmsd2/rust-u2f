@@ -1,6 +1,9 @@
 extern crate u2f;
 extern crate hidapi;
 extern crate serde_json;
+extern crate untrusted;
+extern crate bytebuffer;
+extern crate webpki;
 
 use u2f::usb::hid::*;
 use u2f::usb::*;
@@ -10,6 +13,7 @@ use std::fs;
 use std::path;
 use std::io::Write;
 use std::time::Duration;
+use bytebuffer::*;
 
 pub fn main() {
 
@@ -26,6 +30,8 @@ pub fn main() {
         let app_param = vec![0;32];
 
         if let Some(response) = register(&api, device, &challenge, &app_param) {
+            response.verify(&challenge, &app_param).expect("verify");
+
             write_response_to_file(&response, path::Path::new("regresp.json"));
         }
     } else {
